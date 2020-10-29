@@ -55,7 +55,7 @@ if args.cuda:
 
 # Load data
 A, features, labels, idx_train, idx_val, idx_test = load_data(dataset)
-idx_unlabel = torch.range(idx_train.shape[0], labels.shape[0]-1, dtype=int)
+idx_unlabel = torch.arange(idx_train.shape[0], labels.shape[0], dtype=int)
 
 # Model and optimizer
 model = MLP(nfeat=features.shape[1],
@@ -85,24 +85,24 @@ def propagate(feature, A, order):
         x = torch.spmm(A, x).detach_()
         #print(y.add_(x))
         y.add_(x)
-        
+
     return y.div_(order+1.0).detach_()
 
 def rand_prop(features, training):
     n = features.shape[0]
     drop_rate = args.dropnode_rate
     drop_rates = torch.FloatTensor(np.ones(n) * drop_rate)
-    
+
     if training:
-            
+
         masks = torch.bernoulli(1. - drop_rates).unsqueeze(1)
 
         features = masks.cuda() * features
-            
+
     else:
-            
+
         features = features * (1. - drop_rate)
-    features = propagate(features, A, args.order)    
+    features = propagate(features, A, args.order)
     return features
 
 def consis_loss(logps, temp=args.tem):
@@ -112,7 +112,7 @@ def consis_loss(logps, temp=args.tem):
         sum_p = sum_p + p
     avg_p = sum_p/len(ps)
     #p2 = torch.exp(logp2)
-    
+
     sharp_p = (torch.pow(avg_p, 1./temp) / torch.sum(torch.pow(avg_p, 1./temp), dim=1, keepdim=True)).detach()
     loss = 0.
     for p in ps:
@@ -122,9 +122,9 @@ def consis_loss(logps, temp=args.tem):
 
 def train(epoch):
     t = time.time()
-    
+
     X = features
-    
+
     model.train()
     optimizer.zero_grad()
     X_list = []
@@ -136,12 +136,12 @@ def train(epoch):
     for k in range(K):
         output_list.append(torch.log_softmax(model(X_list[k]), dim=-1))
 
-    
+
     loss_train = 0.
     for k in range(K):
         loss_train += F.nll_loss(output_list[k][idx_train], labels[idx_train])
-     
-        
+
+
     loss_train = loss_train/K
     #loss_train = F.nll_loss(output_1[idx_train], labels[idx_train]) + F.nll_loss(output_1[idx_train], labels[idx_train])
     #loss_js = js_loss(output_1[idx_unlabel], output_2[idx_unlabel])
@@ -158,8 +158,8 @@ def train(epoch):
         X = rand_prop(X,training=False)
         output = model(X)
         output = torch.log_softmax(output, dim=-1)
-        
-    loss_val = F.nll_loss(output[idx_val], labels[idx_val]) 
+
+    loss_val = F.nll_loss(output[idx_val], labels[idx_val])
     acc_val = accuracy(output[idx_val], labels[idx_val])
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(loss_train.item()),
